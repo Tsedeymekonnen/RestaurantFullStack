@@ -15,7 +15,7 @@ class OrderController extends Controller
             'menu_id' => 'required|exists:menus,id',
             'quantity' => 'required|integer|min:1',
             'total_price' => 'required|numeric',
-            'status' => 'in:pending,completed,cancelled', // Ensure valid status
+            'status' => 'in:pending,completed,cancelled',
         ]);
 
         $user = JWTAuth::parseToken()->authenticate();
@@ -25,7 +25,7 @@ class OrderController extends Controller
             'user_id' => $user->id,
             'quantity' => $request->quantity,
             'total_price' => $request->total_price,
-            'status' => $request->status ?? 'pending', // Default to pending
+            'status' => $request->status ?? 'pending',
         ]);
 
         return response()->json([
@@ -34,20 +34,18 @@ class OrderController extends Controller
         ], 201);
     }
 
-    // Fetch orders (admin sees all, user sees only their own)
+    // Fetch orders (admin or super_admin sees all, user sees only their own)
     public function index(Request $request)
     {
         $user = JWTAuth::parseToken()->authenticate();
-        $status = $request->query('status'); // Optional status filter
-        $today = $request->query('today'); // Optional filter for today's orders
+        $status = $request->query('status');
+        $today = $request->query('today');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
-        if ($user->role === 'admin') {
-            // Admin can see all orders, eager load both menu and user
+        if (in_array($user->role, ['admin', 'super_admin'])) {
             $orders = Order::with(['menu', 'user']);
         } else {
-            // Regular users see only their own orders, eager load menu
             $orders = Order::with('menu', 'user')->where('user_id', $user->id);
         }
 
@@ -60,12 +58,14 @@ class OrderController extends Controller
         }
 
         if ($startDate && $endDate) {
-            $orders->whereBetween('created_at', [Carbon::parse($startDate)->startOfDay(), Carbon::parse($endDate)->endOfDay()]);
+            $orders->whereBetween('created_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
         } elseif ($startDate) {
             $orders->whereDate('created_at', Carbon::parse($startDate)->startOfDay());
         }
 
-        // Hide orders older than one week unless explicitly searched for
         if (!$startDate && !$endDate) {
             $orders->where('created_at', '>=', Carbon::now()->subWeek());
         }
@@ -73,39 +73,36 @@ class OrderController extends Controller
         return response()->json($orders->get());
     }
 
+    // Update order status (admin or super_admin can update all; users can only cancel their own under conditions)
     public function updateStatus(Request $request, $id)
     {
         $user = JWTAuth::parseToken()->authenticate();
         $order = Order::findOrFail($id);
-    
-        // Validate request status
+
         $request->validate([
             'status' => 'required|in:pending,completed,cancelled',
         ]);
-    
-        // Check cancellation rules
+
         if ($request->status === 'cancelled') {
-            // Allow admins to cancel any order
-            if ($user->role !== 'admin' && $order->user_id !== $user->id) {
+            // Allow admin or super_admin to cancel any order
+            if (!in_array($user->role, ['admin', 'super_admin']) && $order->user_id !== $user->id) {
                 return response()->json(['error' => 'Unauthorized. You can only cancel your own orders.'], 403);
             }
-    
-            // Check the cancellation deadline (before 4:00 PM on the same day)
+
             $orderDate = Carbon::parse($order->created_at);
-            $cutoffTime = $orderDate->copy()->setTime(10, 0, 0); // 10:00 PM Ethiopia time
+            $cutoffTime = $orderDate->copy()->setTime(22, 0, 0); // 10:00 PM Ethiopia time
             if (Carbon::now()->gt($cutoffTime)) {
-                return response()->json(['error' => 'Orders can only be cancelled before 4:00 PM on the day they were created'], 400);
+                return response()->json(['error' => 'Orders can only be cancelled before 10:00 PM on the day they were created'], 400);
             }
         } 
-        // Other status updates are restricted to admins
-        else if ($user->role !== 'admin') {
+        // Other status changes are restricted to admin or super_admin
+        else if (!in_array($user->role, ['admin', 'super_admin'])) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-    
+
         $order->status = $request->status;
         $order->save();
-    
+
         return response()->json(['message' => 'Order status updated', 'order' => $order]);
     }
-    
 }

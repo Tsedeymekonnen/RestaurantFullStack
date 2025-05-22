@@ -1,58 +1,77 @@
 <?php
+
 namespace App\Http\Controllers;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Tymon\JWTAuth\Facades\JWTAuth;
-
-
+use Illuminate\Support\Facades\Validator;
 class AuthController extends Controller
 {
-    public function register(Request $request)
-    {
-        // Validate the request
-        $request->validate([
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6|confirmed',
-        ]);
+   public function register(Request $request)
+{
+    $validated = $request->validate([
+        'email' => 'required|email|unique:users',
+        'password' => 'required|min:6|confirmed',
+        'personal_area' => 'required|in:Coffee,Daleti,Head Office,Mogle,Transport,Zaki',
+        'floor' => 'required|in:Ground,Mid,First,Second,Third,Fourth,Fifth',
+        'department' => 'required|in:Administrator,Internal Audit,Default,Export,Finance,Fleet operation,General service,Human Resource,ICT,MD office,Monitoring and Evaluation,Organizational Development,President office,Production,Quality,Procurement,Sales and Marketing,Warehouse,Technic'
+    ]);
 
-        // Create user
-        $user = User::create([
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+    $user = User::create([
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+        'personal_area' => $request->personal_area,
+        'floor' => $request->floor,
+        'department' => $request->department
+    ]);
 
-        // Return success response
-        return response()->json(['message' => 'User registered successfully'], 201);
-    }
+    return response()->json(['message' => 'User registered successfully'], 201);
+}
     public function login(Request $request)
     {
-        // Validate the incoming request
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
         ]);
     
-        // Get credentials from the request
         $credentials = $request->only('email', 'password');
     
-        // Attempt to authenticate the user
         if (auth()->attempt($credentials)) {
-            // If successful, generate the JWT token
-            $user = auth()->user(); // Get the authenticated user
-            $token = JWTAuth::fromUser($user); // Generate JWT token
+            $user = auth()->user();
+            $token = JWTAuth::fromUser($user);
     
-            // Return the token and user as a JSON response
             return response()->json([
                 'token' => $token,
-                'user' => $user // Include the user object
+                'user' => $user
             ]);
         }
     
-        // If authentication fails, return an error message
         return response()->json(['error' => 'Unauthorized'], 401);
     }
-    
+
+public function changePassword(Request $request)
+{
+    $user = auth()->user();
+
+    $validator = Validator::make($request->all(), [
+        'current_password' => 'required',
+        'new_password' => 'required|min:6|confirmed',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json($validator->errors(), 422);
+    }
+
+    if (!Hash::check($request->current_password, $user->password)) {
+        return response()->json(['error' => 'Current password is incorrect'], 403);
+    }
+
+    $user->password = Hash::make($request->new_password);
+    $user->save();
+
+    return response()->json(['message' => 'Password changed successfully']);
 }
 
-
+}

@@ -16,6 +16,9 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'personal_area',
+        'floor',
+        'department'
     ];
 
     protected $hidden = [
@@ -27,7 +30,6 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at' => 'datetime',
     ];
 
-    // Implement JWTSubject methods
     public function getJWTIdentifier()
     {
         return $this->getKey();

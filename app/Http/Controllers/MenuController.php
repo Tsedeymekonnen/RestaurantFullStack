@@ -13,6 +13,7 @@ class MenuController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
+            'category' => 'required|in:breakfast,lunch,refreshment', // Add this
             'price' => 'required|numeric',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
         ]);
@@ -25,6 +26,7 @@ class MenuController extends Controller
         $menu = Menu::create([
             'title' => $request->title,
             'description' => $request->description,
+            'category' => $request->category, // Add this
             'price' => $request->price,
             'image' => $imagePath // Save the image path to the database
         ]);
@@ -55,6 +57,7 @@ class MenuController extends Controller
     $request->validate([
         'title' => 'sometimes|required|string|max:255',
         'description' => 'sometimes|required|string',
+        'category' => 'required|in:breakfast,lunch,refreshment', // Add this
         'price' => 'sometimes|required|numeric',
         'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:2048'
     ]);
